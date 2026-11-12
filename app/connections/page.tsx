@@ -43,7 +43,7 @@ export default function Connections(){
     const r=await fetch('/api/connections/'+p.id+'/test',{method:'POST'});
     const j=await r.json();
     setTestResult(current=>({...current,[p.id]:(j.valid?'✓ ':'✕ ')+(j.message||'Không có kết quả')}));
-  }catch{setTestResult(current=>({...current,[p.id]:'✕ Không thể kết nối đến API'})}
+  }catch{setTestResult(current=>({...current,[p.id]:'✕ Không thể kết nối đến API'}))}
   finally{setWorking('')}
  }
  async function remove(p:Provider){
