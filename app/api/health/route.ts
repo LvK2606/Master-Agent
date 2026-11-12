@@ -1,0 +1,2 @@
+import { NextResponse } from 'next/server'; export const runtime='nodejs';
+export async function GET(){return NextResponse.json({ready:Boolean(process.env.DATABASE_URL&&process.env.OPENAI_API_KEY),databaseConfigured:Boolean(process.env.DATABASE_URL),aiConfigured:Boolean(process.env.OPENAI_API_KEY),githubWriteConfigured:Boolean(process.env.GITHUB_TOKEN),mode:'manual-approval'});}
