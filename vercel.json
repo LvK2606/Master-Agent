@@ -1,8 +1,0 @@
-{
-  "framework": "nextjs",
-  "functions": {
-    "app/api/projects/[id]/run/route.ts": {
-      "maxDuration": 60
-    }
-  }
-}
