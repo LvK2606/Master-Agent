@@ -14,7 +14,7 @@ const details:Record<Id,string>={
 export default function Connections(){
  const [data,setData]=useState<Data|null>(null),[keys,setKeys]=useState<Partial<Record<Id,string>>>({});
  const [show,setShow]=useState<Partial<Record<Id,boolean>>>({}),[confirmed,setConfirmed]=useState(false);
- const [working,setWorking]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
+ const [working,setWorking]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');const [testResult,setTestResult]=useState<Partial<Record<Id,string>>>({});
  const load=useCallback(async()=>{try{const r=await fetch('/api/connections',{cache:'no-store'});const j=await r.json();
   if(!r.ok)throw Error(j.error||'Cannot load connections');setData(j);
  }catch(e){setError((e as Error).message)}},[]);
@@ -37,6 +37,15 @@ export default function Connections(){
   if(paid&&!window.confirm('Cho phép API tính phí? Giới hạn số lượt gọi KHÔNG phải giới hạn số tiền và có thể phát sinh phí theo token.'))return;
   await act('edit-'+p.id,'PATCH','/api/connections/'+p.id,{...change,...(paid?{confirm:'I_ACCEPT_API_CHARGES'}:{})});
  }
+ async function test(p:Provider){
+  setWorking('test-'+p.id);setError('');
+  try{
+    const r=await fetch('/api/connections/'+p.id+'/test',{method:'POST'});
+    const j=await r.json();
+    setTestResult(current=>({...current,[p.id]:(j.valid?'✓ ':'✕ ')+(j.message||'Không có kết quả')}));
+  }catch{setTestResult(current=>({...current,[p.id]:'✕ Không thể kết nối đến API'})}
+  finally{setWorking('')}
+ }
  async function remove(p:Provider){
   if(!window.confirm('Xóa API Key của '+p.label+' khỏi kho mã hóa?'))return;
   await act('remove-'+p.id,'DELETE','/api/connections/'+p.id);
@@ -50,7 +59,7 @@ export default function Connections(){
    {data&&!data.vaultReady&&<p className="error">AGENT_VAULT_KEY chưa được cấu hình; không thể lưu API Key.</p>}
    <div className="providerCards">
      {(data?.providers||[]).map(p=><section className="panel providerCard" key={p.id}>
-       <div className="providerTitle"><div><h2 style={{margin:'0 0 8px'}}>{p.label}</h2><span className="tiny">{p.model}</span></div><span className={'status '+(p.available?'completed':'')}>{p.available?'Sẵn sàng':p.connected?'Đã lưu · Chưa bật':'Chưa kết nối'}</span></div>
+       <div className="providerTitle"><div><h2 style={{margin:'0 0 8px'}}>{p.label}</h2><span className="tiny">{p.model}</span></div><span className={'status '+(p.available?'completed':'')}>{p.available?'Đã bật · Chưa xác minh':p.connected?'Đã lưu · Chưa bật':'Chưa kết nối'}</span></div>
        <p className="tiny" style={{lineHeight:1.7,minHeight:49,marginTop:15}}>{details[p.id]}</p>
        {p.connected&&<p className="tiny" style={{color:'#b4ed9d'}}>✓ Đã lưu {p.keyHint?' · cuối '+p.keyHint:''} · Nguồn {p.source==='vault'?'kho mã hóa':'Vercel'}</p>}
        <div className="keyField"><input aria-label={'API Key '+p.id} type={show[p.id]?'text':'password'} value={keys[p.id]||''}
@@ -61,11 +70,12 @@ export default function Connections(){
        <div className="connectBtns"><button className="primary" disabled={!!working||!data?.vaultReady||!(keys[p.id]||'').trim()} onClick={()=>void save(p.id)}><KeyRound size={15}/>{p.connected?'Thay API Key':'Lưu API Key'}</button>
          <a href={p.url} target="_blank" rel="noopener noreferrer" className="secondary" style={{display:'inline-flex',alignItems:'center',gap:6}}>Tạo Key <ExternalLink size={13}/></a></div>
        {p.connected&&p.source==='vault'&&<div className="providerAdmin">
+         <button className="secondary" disabled={!!working} onClick={()=>void test(p)}>Kiểm tra API Key</button>
          <button className="secondary" disabled={!!working} onClick={()=>void update(p,{enabled:!p.enabled})}>{p.enabled?'Tạm dừng':'Bật lại'}</button>
          {p.paid&&<button className="secondary" disabled={!!working} onClick={()=>void update(p,{allowPaid:!p.allowPaid},!p.allowPaid)}>{p.allowPaid?'Khóa API trả phí':'Cho phép dùng API trả phí'}</button>}
          {p.id==='gemini'&&<button className="secondary" disabled={!!working} onClick={()=>void update(p,{freeTierConfirmed:!p.freeTierConfirmed})}>{p.freeTierConfirmed?'Bỏ xác nhận free':'Xác nhận Free tier'}</button>}
          <button className="secondary" disabled={!!working} aria-label="Xóa API Key" onClick={()=>void remove(p)}><Trash2 size={15}/></button>
-       </div>}
+       </div>}{testResult[p.id]&&<p className="tiny" role="status" style={{lineHeight:1.7,marginTop:10}}>{testResult[p.id]}</p>}
      </section>)}
    </div>
    <section className="panel" style={{marginTop:22}}>
