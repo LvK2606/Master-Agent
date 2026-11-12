@@ -4,7 +4,7 @@ AI software delivery dashboard (nine specialist roles, five gated stages) with P
 
 ## Live AI provider routing
 - **Default:** OpenRouter `openrouter/free` — provider routes exclusively to models listed as free. Requires `OPENROUTER_API_KEY`. The OpenRouter free plan is currently capped at 50 requests/day and 20/minute (limits may change).
-- **Optional fallback:** Gemini `gemini-2.5-flash-lite`, activated **only if** both `GEMINI_API_KEY` and `GEMINI_FREE_TIER_CONFIRMED=true` are set. You must ensure your Google AI Studio project remains on its free tier. If billing is enabled, charges are possible; application-level request caps are not billing guarantees.
+- **Optional fallback:** Gemini `gemini-3.5-flash-lite`, activated **only if** both `GEMINI_API_KEY` and `GEMINI_FREE_TIER_CONFIRMED=true` are set. You must ensure your Google AI Studio project remains on its free tier. If billing is enabled, charges are possible; application-level request caps are not billing guarantees.
 - No OpenAI fallback. `OPENAI_API_KEY` from a previous version is ignored.
 - Zero silent retries; at most one attempt per configured provider and request. 429 triggers a 15-minute cooldown; 503 a 2-minute cooldown.
 - Each request reserves a daily allowance atomically in Neon BEFORE calling the external provider. Failed requests count as usage to err on the safe side.
@@ -40,3 +40,6 @@ Apply [database/free-provider-quota.sql](database/free-provider-quota.sql) to yo
 `npm install && npm run dev`
 
 Configure `DATABASE_URL`, `MASTER_PASSWORD`, and `OPENROUTER_API_KEY` in environment variables before use.
+
+## 2026-11 Gemini 404 fix
+Gemini Developer API restricts Gemini 2.5 Flash-Lite generation for projects without prior use. Use `gemini-3.5-flash-lite`, documented with a Free Tier. HTTP 404 is now described clearly and a second explicitly enabled provider may be tried without restarting the completed roles. Free providers are preferred before any paid providers. If paid fallback is enabled in Connections, it may incur charges; disable it to enforce free-only mode. No migration, reset, or automatic API requests are required.

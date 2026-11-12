@@ -15,7 +15,7 @@ export const ROLE_INFO:{id:RoleId,name:string,specialty:string}[]=[
 ];
 export const PROVIDER_META:{id:ProviderId,label:string,model:string,paid:boolean,url:string}[]=[
  {id:'openrouter',label:'OpenRouter Free',model:'openrouter/free',paid:false,url:'https://openrouter.ai/settings/keys'},
- {id:'gemini',label:'Google Gemini',model:'gemini-2.5-flash-lite',paid:false,url:'https://aistudio.google.com/app/apikey'},
+ {id:'gemini',label:'Google Gemini',model:'gemini-3.5-flash-lite',paid:false,url:'https://aistudio.google.com/app/apikey'},
  {id:'deepseek',label:'DeepSeek API',model:'deepseek-flash',paid:true,url:'https://platform.deepseek.com/api_keys'},
  {id:'openai',label:'OpenAI API',model:'gpt-4.1-mini',paid:true,url:'https://platform.openai.com/api-keys'}
 ];
@@ -72,7 +72,8 @@ export async function getRolePlan(){
  return ROLE_INFO.map(role=>{
   const priority=PROVIDER_META.filter(p=>status.some(s=>s.id===p.id&&s.available)).sort((a,b)=>{
    // Default zero-cost preference. Paid models are used only when a key is explicitly opted in.
-   return (SCORES[role.id][b.id]-(b.paid?5:0))-(SCORES[role.id][a.id]-(a.paid?5:0));
+   if(a.paid!==b.paid) return a.paid?1:-1; // prefer free providers when possible
+   return SCORES[role.id][b.id]-SCORES[role.id][a.id];
   });
   return {...role,preferred:priority[0]?.id||null,fallbacks:priority.slice(1).map(p=>p.id),
      rationale:priority.length?'Ưu tiên theo vai trò và các API đã được cho phép':'Chưa có API khả dụng'};
@@ -105,7 +106,7 @@ async function callChat(endpoint:string,provider:ProviderId,secret:string,model:
  return {output:decodeJson(content),model:String(json.model||model).slice(0,80),input:Number(json.usage?.prompt_tokens||0),outputTokens:Number(json.usage?.completion_tokens||0)};
 }
 async function callGemini(secret:string,system:string,user:string){
- const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent',
+ const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',
  {method:'POST',cache:'no-store',signal:AbortSignal.timeout(23000),
  headers:{'Content-Type':'application/json','x-goog-api-key':secret},
  body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:user}]}],
@@ -114,13 +115,16 @@ async function callGemini(secret:string,system:string,user:string){
  const data=await res.json();
  const content=(data.candidates?.[0]?.content?.parts||[]).map((x:{text?:string})=>x.text||'').join('');
  if(!content)throw new Error('Gemini did not return usable text');
- return {output:decodeJson(content),model:'gemini-2.5-flash-lite',
+ return {output:decodeJson(content),model:'gemini-3.5-flash-lite',
  input:Number(data.usageMetadata?.promptTokenCount||0),outputTokens:Number(data.usageMetadata?.candidatesTokenCount||0)};
 }
 export async function runRole(role:RoleId,system:string,user:string){
  const ready=await credentials();
  if(!ready.length)throw new Error('Chưa có API khả dụng. Vào Kết nối AI để thêm khóa. Tài khoản ChatGPT hoặc DeepSeek Chat không tự cấp quyền API.');
- const candidates=ready.sort((a,b)=>(SCORES[role][b.id]-(b.mode==='paid'?5:0))-(SCORES[role][a.id]-(a.mode==='paid'?5:0)));
+ const candidates=ready.sort((a,b)=>{
+  if(a.mode!==b.mode) return a.mode==='free'?-1:1;
+  return SCORES[role][b.id]-SCORES[role][a.id];
+ });
  const problems:string[]=[];
  for(const candidate of candidates){
   try{
@@ -133,6 +137,12 @@ export async function runRole(role:RoleId,system:string,user:string){
    return {output:outcome.output,provider:candidate.id,model:outcome.model,usage:{inputTokens:outcome.input,outputTokens:outcome.outputTokens}};
   }catch(e){
    if(e instanceof QuotaDenied){problems.push(e.message);continue;}
+   if(e instanceof UpstreamError&&e.status===404){
+    problems.push(e.provider==='gemini'
+      ?'Gemini model không khả dụng với project này (HTTP 404). Đã chuyển sang Gemini 3.5 Flash-Lite; kiểm tra Free Tier và API Key nếu lỗi tiếp diễn.'
+      :e.provider+' model/endpoint returned HTTP 404');
+    continue;
+   }
    if(e instanceof UpstreamError&&(e.status===429||e.status===503)){
     await cooldown(candidate.id,e.status===429?900:120);
     problems.push(e.message);continue;
